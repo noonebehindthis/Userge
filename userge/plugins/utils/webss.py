@@ -1,8 +1,8 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -19,11 +19,11 @@ from userge import userge, Message, Config
 @userge.on_cmd("webss", about={'header': "Get snapshot of a website"})
 async def webss(message: Message):
     if Config.GOOGLE_CHROME_BIN is None:
-        await message.err("need to install Google Chrome. Module Stopping")
+        await message.edit("`need to install Google Chrome. Module Stopping`", del_in=5)
         return
     link_match = match(r'\bhttps?://.*\.\S+', message.input_str)
     if not link_match:
-        await message.err("`I need a valid link to take screenshots from.`")
+        await message.err("I need a valid link to take screenshots from.")
         return
     link = link_match.group()
     await message.edit("`Processing ...`")

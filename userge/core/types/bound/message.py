@@ -1,10 +1,10 @@
 # pylint: disable=missing-module-docstring
 #
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -12,53 +12,55 @@ __all__ = ['Message']
 
 import re
 import asyncio
-from typing import List, Dict, Tuple, Union, Optional, Sequence
+from contextlib import contextmanager
+from typing import List, Dict, Tuple, Union, Optional, Sequence, Callable, Any
 
-from pyrogram.types import InlineKeyboardMarkup, Message as RawMessage
-from pyrogram.errors.exceptions import MessageAuthorRequired, MessageTooLong
-from pyrogram.errors.exceptions.bad_request_400 import MessageNotModified, MessageIdInvalid
-from pyrogram.errors.exceptions.forbidden_403 import MessageDeleteForbidden
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message as RawMessage
+from pyrogram.errors import (
+    MessageAuthorRequired, MessageTooLong, MessageNotModified,
+    MessageIdInvalid, MessageDeleteForbidden, BotInlineDisabled
+)
 
-from userge import logging
+from userge import logging, Config
+from userge.utils import is_command
 from ... import client as _client  # pylint: disable=unused-import
 
-_CANCEL_LIST: List[int] = []
-_ERROR_MSG_DELETE_TIMEOUT = 5
+_CANCEL_CALLBACKS: Dict[str, List[Callable[[], Any]]] = {}
 _ERROR_STRING = "**ERROR**: `{}`"
+_ERROR_MSG_DELETE_TIMEOUT = 5
 
 _LOG = logging.getLogger(__name__)
 _LOG_STR = "<<<!  :::::  %s  :::::  !>>>"
 
 
-def _msg_to_dict(message: RawMessage) -> Dict[str, object]:
-    kwargs_ = vars(message)
-    del message
-    for key_ in ['_client', '_channel', '_filtered', '_process_canceled',
-                 'client', '_filtered_input_str', '_flags', '_kwargs']:
-        if key_ in kwargs_:
-            del kwargs_[key_]
-    return kwargs_
-
-
 class Message(RawMessage):
     """ Modded Message Class For Userge """
     def __init__(self,
-                 client: Union['_client.Userge', '_client._UsergeBot'],
-                 message: RawMessage,
-                 **kwargs: Union[str, bool]) -> None:
-        super().__init__(client=client, **_msg_to_dict(message))
-        self.message_id: int
-        self.reply_to_message: Optional[RawMessage]
-        if self.reply_to_message:
-            self.reply_to_message = self.__class__(self._client, self.reply_to_message)
+                 client: Union['_client.Userge', '_client.UsergeBot'],
+                 mvars: Dict[str, object], module: str, **kwargs: Union[str, bool]) -> None:
         self._filtered = False
-        self._process_canceled = False
-        self._filtered_input_str: str = ''
+        self._filtered_input_str = ''
         self._flags: Dict[str, str] = {}
+        self._process_canceled = False
+        self._module = module
         self._kwargs = kwargs
+        super().__init__(client=client, **mvars)
+
+    @classmethod
+    def parse(cls, client: Union['_client.Userge', '_client.UsergeBot'],
+              message: RawMessage, **kwargs: Union[str, bool]) -> 'Message':
+        """ parse message """
+        mvars = vars(message)
+        for key_ in ['_client', '_filtered', '_filtered_input_str',
+                     '_flags', '_process_canceled', '_module', '_kwargs']:
+            if key_ in mvars:
+                del mvars[key_]
+        if mvars['reply_to_message']:
+            mvars['reply_to_message'] = cls.parse(client, mvars['reply_to_message'], **kwargs)
+        return cls(client, mvars, **kwargs)
 
     @property
-    def client(self) -> Union['_client.Userge', '_client._UsergeBot']:
+    def client(self) -> Union['_client.Userge', '_client.UsergeBot']:
         """ returns client """
         return self._client
 
@@ -112,9 +114,6 @@ class Message(RawMessage):
     @property
     def process_is_canceled(self) -> bool:
         """ Returns True if process canceled """
-        if self.message_id in _CANCEL_LIST:
-            _CANCEL_LIST.remove(self.message_id)
-            self._process_canceled = True
         return self._process_canceled
 
     @property
@@ -129,10 +128,10 @@ class Message(RawMessage):
         if self.reply_to_message:
             if self.reply_to_message.from_user:
                 user_e = self.reply_to_message.from_user.id
-            text = self.input_str
+            text = self.filtered_input_str
             return user_e, text
-        if self.input_str:
-            data = self.input_str.split(maxsplit=1)
+        if self.filtered_input_str:
+            data = self.filtered_input_str.split(maxsplit=1)
             # Grab First Word and Process it.
             if len(data) == 2:
                 user, text = data
@@ -153,28 +152,85 @@ class Message(RawMessage):
                 user_e = user
         return user_e, text
 
-    def cancel_the_process(self) -> None:
-        """ Set True to the self.process_is_canceled """
-        _CANCEL_LIST.append(self.message_id)
-
     def _filter(self) -> None:
-        if not self._filtered:
-            prefix = str(self._kwargs.get('prefix', '-'))
-            del_pre = bool(self._kwargs.get('del_pre', False))
-            input_str = self.input_str
-            for i in input_str.strip().split():
-                match = re.match(f"({prefix}[a-zA-Z]+)([0-9]*)$", i)
-                if match:
-                    items: Sequence[str] = match.groups()
-                    self._flags[items[0].lstrip(prefix).lower() if del_pre
-                                else items[0].lower()] = items[1] or ''
-                else:
-                    self._filtered_input_str += ' ' + i
-            self._filtered_input_str = self._filtered_input_str.strip()
-            _LOG.debug(
-                _LOG_STR,
-                f"Filtered Input String => [ {self._filtered_input_str}, {self._flags} ]")
-            self._filtered = True
+        if self._filtered:
+            return
+
+        prefix = str(self._kwargs.get('prefix', '-'))
+        del_pre = bool(self._kwargs.get('del_pre', False))
+        input_str = self.input_str
+        for i in input_str.strip().split(" "):
+            match = re.match(f"({prefix}[a-zA-Z]+)([0-9]*)$", i)
+            if match:
+                items: Sequence[str] = match.groups()
+                self._flags[items[0].lstrip(prefix).lower() if del_pre
+                            else items[0].lower()] = items[1] or ''
+            else:
+                self._filtered_input_str += ' ' + i
+        self._filtered_input_str = self._filtered_input_str.strip()
+        _LOG.debug(
+            _LOG_STR,
+            f"Filtered Input String => [ {self._filtered_input_str}, {self._flags} ]")
+        self._filtered = True
+
+    @property
+    def _key(self) -> str:
+        return f"{self.chat.id}.{self.message_id}"
+
+    def _call_cancel_callbacks(self) -> bool:
+        callbacks = _CANCEL_CALLBACKS.pop(self._key, None)
+        if not callbacks:
+            return False
+        for callback in callbacks:
+            callback()
+        return True
+
+    @staticmethod
+    def _call_all_cancel_callbacks() -> int:
+        i = 0
+        for callbacks in _CANCEL_CALLBACKS.values():
+            for callback in callbacks:
+                callback()
+                i += 1
+        _CANCEL_CALLBACKS.clear()
+        return i
+
+    @contextmanager
+    def cancel_callback(self, callback: Optional[Callable[[], Any]] = None) -> None:
+        """ run in a cancelable context. callback will be called when user cancel it. """
+        is_first = False
+        key = self._key
+        if key not in _CANCEL_CALLBACKS:
+            _CANCEL_CALLBACKS[key] = []
+            if not self._process_canceled:
+                _CANCEL_CALLBACKS[key].append(
+                    lambda: setattr(self, '_process_canceled', True))
+            is_first = True
+        if callback:
+            _CANCEL_CALLBACKS[key].append(callback)
+        try:
+            yield
+        finally:
+            try:
+                if is_first:
+                    del _CANCEL_CALLBACKS[key]
+                elif callback:
+                    _CANCEL_CALLBACKS[key].remove(callback)
+            except (KeyError, ValueError):
+                pass
+
+    async def canceled(self, reply=False) -> None:
+        """\nedit or reply that process canceled
+
+        Parameters:
+            reply (``bool``):
+                reply msg if True, else edit
+        """
+        if reply:
+            func = self.reply
+        else:
+            func = self.edit
+        await func("`Process Canceled!`", del_in=5)
 
     async def send_as_file(self,
                            text: str,
@@ -213,6 +269,8 @@ class Message(RawMessage):
             else self.message_id
         if delete_message:
             asyncio.get_event_loop().create_task(self.delete())
+        if log and isinstance(log, bool):
+            log = self._module
         return await self._client.send_as_file(chat_id=self.chat.id,
                                                text=text,
                                                filename=filename,
@@ -290,6 +348,8 @@ class Message(RawMessage):
             quote = self.chat.type != "private"
         if reply_to_message_id is None and quote:
             reply_to_message_id = self.message_id
+        if log and isinstance(log, bool):
+            log = self._module
         return await self._client.send_message(chat_id=self.chat.id,
                                                text=text,
                                                del_in=del_in,
@@ -350,6 +410,8 @@ class Message(RawMessage):
         Raises:
             RPCError: In case of a Telegram RPC error.
         """
+        if log and isinstance(log, bool):
+            log = self._module
         try:
             return await self._client.edit_message_text(
                 chat_id=self.chat.id,
@@ -371,7 +433,7 @@ class Message(RawMessage):
                                        disable_web_page_preview=disable_web_page_preview,
                                        reply_markup=reply_markup)
                 if isinstance(msg, Message):
-                    self.message_id = msg.message_id
+                    self.message_id = msg.message_id  # pylint: disable=W0201
                 return msg
             raise m_er
 
@@ -445,12 +507,13 @@ class Message(RawMessage):
     async def err(self,
                   text: str,
                   del_in: int = -1,
+                  show_help: bool = True,
                   log: Union[bool, str] = False,
                   sudo: bool = True,
                   parse_mode: Union[str, object] = object,
                   disable_web_page_preview: Optional[bool] = None,
                   reply_markup: InlineKeyboardMarkup = None) -> Union['Message', bool]:
-        """\nYou can send error messages using this method
+        """\nYou can send error messages with command info button using this method
 
         Example:
                 message.err(text='error', del_in=3)
@@ -460,6 +523,9 @@ class Message(RawMessage):
 
             del_in (``int``):
                 Time in Seconds for delete that message.
+
+            show_help (``bool``):
+                Show help if available
 
             log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded
@@ -485,28 +551,73 @@ class Message(RawMessage):
                 An InlineKeyboardMarkup object.
 
         Returns:
-            On success, the edited
-            :obj:`Message` or True is returned.
+            On success,
+            If Client of message is Userge:
+                the sent :obj:`Message` or True is returned.
+            if Client of message is UsergeBot:
+                the edited :obj:`Message` or True is returned.
         """
-        del_in = del_in if del_in > 0 \
-            else _ERROR_MSG_DELETE_TIMEOUT
-        return await self.edit(text=_ERROR_STRING.format(text),
-                               del_in=del_in,
-                               log=log,
-                               sudo=sudo,
-                               parse_mode=parse_mode,
-                               disable_web_page_preview=disable_web_page_preview,
-                               reply_markup=reply_markup)
+        if show_help:
+            command_name = self.text.split()[0].strip()
+            cmd = command_name.lstrip(Config.CMD_TRIGGER).lstrip(Config.SUDO_TRIGGER)
+            is_cmd = is_command(cmd)
+        else:
+            is_cmd = False
+        if not is_cmd or not bool(Config.BOT_TOKEN):
+            del_in = del_in if del_in > 0 else _ERROR_MSG_DELETE_TIMEOUT
+            return await self.edit(text=_ERROR_STRING.format(text),
+                                   del_in=del_in,
+                                   log=log,
+                                   sudo=sudo,
+                                   parse_mode=parse_mode,
+                                   disable_web_page_preview=disable_web_page_preview,
+                                   reply_markup=reply_markup)
+        bot_username = (await self._client.get_me()).username
+        if self._client.is_bot:
+            btn = [InlineKeyboardButton("Info!", url=f"t.me/{bot_username}?start={cmd}")]
+            if reply_markup:
+                reply_markup.inline_keyboard.append(btn)
+            else:
+                reply_markup = InlineKeyboardMarkup([btn])
+            msg_obj = await self.edit(text=_ERROR_STRING.format(text),
+                                      del_in=del_in,
+                                      log=log,
+                                      sudo=sudo,
+                                      parse_mode=parse_mode,
+                                      disable_web_page_preview=disable_web_page_preview,
+                                      reply_markup=reply_markup)
+        else:
+            bot_username = (await self._client.bot.get_me()).username
+            try:
+                k = await self._client.get_inline_bot_results(
+                    bot_username, f"msg.err {cmd} {_ERROR_STRING.format(text)}"
+                )
+                await self.delete()
+                msg_obj = await self._client.send_inline_bot_result(
+                    self.chat.id, query_id=k.query_id,
+                    result_id=k.results[2].id, hide_via=True
+                )
+            except (IndexError, BotInlineDisabled):
+                del_in = del_in if del_in > 0 else _ERROR_MSG_DELETE_TIMEOUT
+                msg_obj = await self.edit(text=_ERROR_STRING.format(text),
+                                          del_in=del_in,
+                                          log=log,
+                                          sudo=sudo,
+                                          parse_mode=parse_mode,
+                                          disable_web_page_preview=disable_web_page_preview,
+                                          reply_markup=reply_markup)
+        return msg_obj
 
     async def force_err(self,
                         text: str,
                         del_in: int = -1,
+                        show_help: bool = True,
                         log: Union[bool, str] = False,
                         parse_mode: Union[str, object] = object,
                         disable_web_page_preview: Optional[bool] = None,
                         reply_markup: InlineKeyboardMarkup = None,
                         **kwargs) -> Union['Message', bool]:
-        """\nThis will first try to message.edit.
+        """\nThis will first try to message.err.
         If it raise MessageAuthorRequired or
         MessageIdInvalid error, run message.reply.
 
@@ -519,6 +630,9 @@ class Message(RawMessage):
 
             del_in (``int``):
                 Time in Seconds for delete that message.
+
+            show_help (``bool``):
+                Show help if available
 
             log (``bool`` | ``str``, *optional*):
                 If ``True``, the message will be forwarded
@@ -543,18 +657,68 @@ class Message(RawMessage):
             **kwargs (for message.reply)
 
         Returns:
-            On success, the edited or replied
-            :obj:`Message` or True is returned.
+            On success,
+            If Client of message is Userge:
+                the sent :obj:`Message` or True is returned.
+            if Client of message is UsergeBot:
+                the edited or replied :obj:`Message` or True is returned.
         """
-        del_in = del_in if del_in > 0 \
-            else _ERROR_MSG_DELETE_TIMEOUT
-        return await self.force_edit(text=_ERROR_STRING.format(text),
+        try:
+            msg_obj = await self.err(text=text,
                                      del_in=del_in,
+                                     show_help=show_help,
                                      log=log,
                                      parse_mode=parse_mode,
                                      disable_web_page_preview=disable_web_page_preview,
-                                     reply_markup=reply_markup,
-                                     **kwargs)
+                                     reply_markup=reply_markup)
+        except (MessageAuthorRequired, MessageIdInvalid):
+            if show_help:
+                command_name = self.text.split()[0].strip()
+                cmd = command_name.lstrip(Config.CMD_TRIGGER).lstrip(Config.SUDO_TRIGGER)
+                is_cmd = is_command(cmd)
+            else:
+                is_cmd = False
+            if not is_cmd or not bool(Config.BOT_TOKEN):
+                del_in = del_in if del_in > 0 else _ERROR_MSG_DELETE_TIMEOUT
+                return await self.reply(text=_ERROR_STRING.format(text),
+                                        del_in=del_in,
+                                        log=log,
+                                        parse_mode=parse_mode,
+                                        disable_web_page_preview=disable_web_page_preview,
+                                        reply_markup=reply_markup)
+            bot_username = (await self._client.get_me()).username
+            if self._client.is_bot:
+                btn = [InlineKeyboardButton("Info!", url=f"t.me/{bot_username}?start={cmd}")]
+                if reply_markup:
+                    reply_markup.inline_keyboard.append(btn)
+                else:
+                    reply_markup = InlineKeyboardMarkup([btn])
+                msg_obj = await self.reply(text=_ERROR_STRING.format(text),
+                                           del_in=del_in,
+                                           log=log,
+                                           parse_mode=parse_mode,
+                                           disable_web_page_preview=disable_web_page_preview,
+                                           reply_markup=reply_markup)
+            else:
+                bot_username = (await self._client.bot.get_me()).username
+                try:
+                    k = await self._client.get_inline_bot_results(
+                        bot_username, f"msg.err {cmd} {_ERROR_STRING.format(text)}"
+                    )
+                    await self.delete()
+                    msg_obj = await self._client.send_inline_bot_result(
+                        self.chat.id, query_id=k.query_id,
+                        result_id=k.results[2].id, hide_via=True
+                    )
+                except (IndexError, BotInlineDisabled):
+                    del_in = del_in if del_in > 0 else _ERROR_MSG_DELETE_TIMEOUT
+                    msg_obj = await self.reply(text=_ERROR_STRING.format(text),
+                                               del_in=del_in,
+                                               log=log,
+                                               parse_mode=parse_mode,
+                                               disable_web_page_preview=disable_web_page_preview,
+                                               reply_markup=reply_markup)
+        return msg_obj
 
     async def edit_or_send_as_file(self,
                                    text: str,

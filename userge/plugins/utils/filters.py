@@ -1,10 +1,10 @@
 """ setup filters """
 
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -82,7 +82,7 @@ async def filters_active(message: Message) -> None:
     if out:
         await message.edit(out, del_in=0)
     else:
-        await message.err("There are no saved filters in this chat")
+        await message.edit("`There are no saved filters in this chat`", del_in=5)
 
 
 @userge.on_cmd(
@@ -180,11 +180,12 @@ async def chat_filter(message: Message) -> None:
                 if getattr(message, media_type, None):
                     reply = True
             elif message.text:
-                input_text = message.text.strip()
-                if (input_text == name
-                        or input_text.startswith(f"{name} ")
-                        or input_text.endswith(f" {name}")
-                        or f" {name} " in input_text):
+                l_name = name.lower()
+                input_text = message.text.strip().lower()
+                if (input_text == l_name
+                        or input_text.startswith(f"{l_name} ")
+                        or input_text.endswith(f" {l_name}")
+                        or f" {l_name} " in input_text):
                     reply = True
             if reply:
                 await CHANNEL.forward_stored(client=message.client,

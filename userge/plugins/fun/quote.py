@@ -1,8 +1,8 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -35,10 +35,9 @@ async def quotecmd(message: Message):
             return
         quote = await conv.get_response(mark_read=True)
         if not quote.sticker:
-            await message.err('something went wrong!')
+            await message.edit('something went wrong!, see here: @QuotlyBot')
         else:
             message_id = replied.message_id if replied else None
             await userge.send_sticker(chat_id=message.chat.id,
                                       sticker=quote.sticker.file_id,
-                                      file_ref=quote.sticker.file_ref,
                                       reply_to_message_id=message_id)

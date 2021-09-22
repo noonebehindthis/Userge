@@ -1,15 +1,17 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
 import os
-import wget
+
 import speedtest
-from userge import userge, Message
+import wget
+
+from userge import userge, Message, pool
 from userge.utils import humanbytes
 
 CHANNEL = userge.getCLogger(__name__)
@@ -28,9 +30,9 @@ async def speedtst(message: Message):
         test.results.share()
         result = test.results.dict()
     except Exception as e:
-        await message.err(text=e)
+        await message.err(e)
         return
-    path = wget.download(result['share'])
+    path = await pool.run_in_thread(wget.download)(result['share'])
     output = f"""**--Started at {result['timestamp']}--
 
 Client:

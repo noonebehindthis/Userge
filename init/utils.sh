@@ -1,14 +1,28 @@
 #!/bin/bash
 #
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
-declare -r pVer=$(sed -E 's/\w+ 3\.8\.([0-9]+)/3.8.\1/g' < <(python3.8 -V 2> /dev/null))
+declare -r minPVer=8
+declare -r maxPVer=9
+
+getPythonVersion() {
+    local -i count=$minPVer
+    local found
+    while true; do
+        found=$(python3.$count -c "print('hi')" 2> /dev/null)
+        test "$found" && break
+        count+=1
+        [[ $count -gt $maxPVer ]] && break
+    done
+    local ptn='s/Python (3\.[0-9]{1,2}\.[0-9]{1,2}).*/\1/g'
+    declare -gr pVer=$(sed -E "$ptn" <<< "$(python3.$count -V 2> /dev/null)")
+}
 
 log() {
     local text="$*"
@@ -31,7 +45,9 @@ runPythonCode() {
 }
 
 runPythonModule() {
-    python${pVer%.*} -m "$@"
+    python${pVer%.*} -m "$@" &
+    setProc $!
+    waitProc
 }
 
 gitInit() {
@@ -69,6 +85,10 @@ fetchBranches() {
     for r_b in $r_bs; do
         [[ $l_bs =~ $r_b ]] || git branch $r_b $UPSTREAM_REMOTE/$r_b &> /dev/null
     done
+}
+
+updateBuffer() {
+    git config http.postBuffer 524288000
 }
 
 upgradePip() {

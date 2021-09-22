@@ -1,8 +1,8 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -88,12 +88,12 @@ async def dictionary(message: Message):
         return out
 
     if not input_:
-        await message.edit("`❌Plz enter word to search‼️`", del_in=5)
+        await message.err("❌Plz enter word to search‼️")
     else:
         word = input_
-        async with aiohttp.ClientSession() as ses:
-            async with ses.get(f"https://api.dictionaryapi.dev/api/v1/entries/en/{word}") as res:
-                r_dec = await res.json()
+        url = f"https://api.dictionaryapi.dev/api/v1/entries/en/{word}"
+        async with aiohttp.ClientSession() as ses, ses.get(url) as res:
+            r_dec = await res.json()
         v_word = input_
         if isinstance(r_dec, list):
             r_dec = r_dec[0]

@@ -1,10 +1,10 @@
 """ setup notes """
 
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -73,7 +73,7 @@ async def view_notes(message: Message) -> None:
     if out:
         await message.edit(out, del_in=0)
     else:
-        await message.err("There are no saved notes in this chat")
+        await message.edit("`There are no saved notes in this chat`", del_in=5)
 
 
 @userge.on_cmd(
@@ -99,7 +99,7 @@ async def remove_note(message: Message) -> None:
                 NOTES_COLLECTION.delete_many({'chat_id': message.chat.id}),
                 message.edit("`Cleared All Notes in This Chat !`", del_in=5))
         else:
-            await message.err("Couldn't find notes in this chat!")
+            await message.edit("Couldn't find notes in this chat!", del_in=5)
         return
     notename = message.input_str
     if not notename:
@@ -171,7 +171,7 @@ async def get_note(message: Message) -> None:
         return
     can_access = message.from_user.is_self or message.from_user.id in Config.SUDO_USERS
     if Config.OWNER_ID:
-        can_access = can_access or message.from_user.id == Config.OWNER_ID
+        can_access = can_access or message.from_user.id in Config.OWNER_ID
     notename = message.matches[0].group(1).lower()
     mid, is_global = (0, False)
     for note in NOTES_DATA[message.chat.id]:
@@ -221,7 +221,7 @@ async def add_note(message: Message) -> None:
         content = replied.text.html
     content = "📝 **Note** : `{}`\n\n{}".format(notename, content or '')
     if not (content or (replied and replied.media)):
-        await message.err(text="No Content Found!")
+        await message.err("No Content Found!")
         return
     await message.edit("`adding note ...`")
     message_id = await CHANNEL.store(replied, content)

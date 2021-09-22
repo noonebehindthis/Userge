@@ -1,8 +1,8 @@
-# Copyright (C) 2020 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
-# Please see < https://github.com/uaudith/Userge/blob/master/LICENSE >
+# Please see < https://github.com/UsergeTeam/Userge/blob/master/LICENSE >
 #
 # All rights reserved.
 
@@ -15,7 +15,7 @@ from userge import userge, Message
 async def search(message: Message):
     cmd = message.input_str
     if not cmd:
-        await message.err(text="Enter any keyword to search in commands")
+        await message.err("Enter any keyword to search in commands")
         return
     found = [i for i in sorted(list(userge.manager.enabled_commands)) if cmd in i]
     out_str = '    '.join(found)
