@@ -1,6 +1,6 @@
 """ paste text to bin """
 
-# Copyright (C) 2020-2021 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
+# Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
 # and is released under the "GNU v3.0 License Agreement".
@@ -43,7 +43,7 @@ class PasteService:
                 break
         return token
 
-    # pylint: disable=W0613
+    # pylint: disable = W0613, R0201
     async def paste(self, ses: aiohttp.ClientSession,
                     text: str, file_type: Optional[str]) -> Optional[str]:
         """ returns the success url or None if failed """
@@ -120,13 +120,16 @@ class Pasting(PasteService):
 
     async def paste(self, ses: aiohttp.ClientSession,
                     text: str, file_type: Optional[str]) -> Optional[str]:
-        data = {"content": text}
+        data = {
+            "heading": "userge",
+            "content": text
+        }
         if file_type:
             data['code'] = "true"
         async with ses.post(self._url + "api", json=data) as resp:
             if resp.status != 200:
                 return None
-            return self._url + await resp.text()
+            return self._url + (await resp.json())['key']
 
 
 class PastyLus(PasteService):
