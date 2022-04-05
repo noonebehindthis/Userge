@@ -16,13 +16,11 @@ from typing import Union, Optional
 
 from pyrogram.parser import Parser
 
-from userge import logging, Config
-from userge.utils import secure_text
+from userge import logging, config
 from ... import types
 from ...ext import RawClient
 
 _LOG = logging.getLogger(__name__)
-_LOG_STR = "<<<!  :::::  %s  :::::  !>>>"
 
 
 class SendAsFile(RawClient):  # pylint: disable=missing-class-docstring
@@ -71,13 +69,11 @@ class SendAsFile(RawClient):  # pylint: disable=missing-class-docstring
         Returns:
             On success, the sent Message is returned.
         """
-        if text and chat_id not in Config.AUTH_CHATS:
-            text = secure_text(str(text))
         if not as_raw:
             text = (await Parser(self).parse(text)).get("message")
         doc = io.BytesIO(text.encode())
         doc.name = filename
-        _LOG.debug(_LOG_STR, f"Uploading {filename} To Telegram")
+
         msg = await self.send_document(chat_id=chat_id,
                                        document=doc,
                                        caption=caption[:1024],

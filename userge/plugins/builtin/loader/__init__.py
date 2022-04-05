@@ -1,5 +1,3 @@
-# pylint: disable=missing-module-docstring
-#
 # Copyright (C) 2020-2022 by UsergeTeam@Github, < https://github.com/UsergeTeam >.
 #
 # This file is part of < https://github.com/UsergeTeam/Userge > project,
@@ -8,6 +6,4 @@
 #
 # All rights reserved.
 
-from .filter import Filter  # noqa
-from .command import Command  # noqa
-from .plugin import Plugin  # noqa
+"""high lvl interface for low lvl loader"""

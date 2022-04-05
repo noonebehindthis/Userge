@@ -17,23 +17,25 @@ from pyrogram.errors import ChatWriteForbidden
 from pyrogram.types import Message as RawMessage
 from pyrogram.errors.exceptions import MessageTooLong
 
-from userge import logging, Config
+from userge import config
 from userge.utils import SafeDict, get_file_id_of_media, parse_buttons
 from ..bound import message as _message  # pylint: disable=unused-import
 from ... import client as _client  # pylint: disable=unused-import
 
-_LOG = logging.getLogger(__name__)
-_LOG_STR = "<<<!  :::::  %s  :::::  !>>>"
-
 
 def _gen_string(name: str) -> str:
-    return "**logger** : #" + name.split('.')[-1].upper() + "\n\n{}"
+    parts = name.split('.')
+
+    if len(parts) >= 2:
+        name = parts[-2]
+
+    return "**logger** : #" + name.upper() + "\n\n{}"
 
 
 class ChannelLogger:
     """ Channel logger for Userge """
     def __init__(self, client: Union['_client.Userge', '_client.UsergeBot'], name: str) -> None:
-        self._id = Config.LOG_CHANNEL_ID
+        self._id = config.LOG_CHANNEL_ID
         self._client = client
         self._string = _gen_string(name)
 
@@ -49,7 +51,7 @@ class ChannelLogger:
             str
         """
         return "<b><a href='https://t.me/c/{}/{}'>Preview</a></b>".format(
-            str(Config.LOG_CHANNEL_ID)[4:], message_id)
+            str(config.LOG_CHANNEL_ID)[4:], message_id)
 
     async def log(self, text: str, name: str = '') -> int:
         """\nsend text message to log channel.
@@ -67,10 +69,10 @@ class ChannelLogger:
         string = self._string
         if name:
             string = _gen_string(name)
-        _LOG.debug(_LOG_STR, f"logging text : {text} to channel : {self._id}")
         try:
             msg = await self._client.send_message(chat_id=self._id,
-                                                  text=string.format(text.strip()))
+                                                  text=string.format(text.strip()),
+                                                  disable_web_page_preview=True)
         except MessageTooLong:
             msg = await self._client.send_as_file(chat_id=self._id,
                                                   text=string.format(text.strip()),
@@ -100,8 +102,6 @@ class ChannelLogger:
         Returns:
             None
         """
-        _LOG.debug(
-            _LOG_STR, f"forwarding msg : {message} to channel : {self._id}")
         if isinstance(message, RawMessage):
             if message.media:
                 await self.log("**Forwarding Message...**", name)

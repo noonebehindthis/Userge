@@ -10,35 +10,24 @@
 
 import asyncio
 import importlib
-import os
 import re
 import shlex
 from os.path import basename, join, exists
-from typing import Tuple, List, Optional, Iterator, Union
+from typing import Tuple, List, Optional, Iterator, Union, Any
 
-from emoji import get_emoji_regexp
-from html_telegraph_poster import TelegraphPoster
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 import userge
 
 _LOG = userge.logging.getLogger(__name__)
+
 _BTN_URL_REGEX = re.compile(r"(\[([^\[]+?)]\[buttonurl:/{0,2}(.+?)(:same)?])")
 _PTN_SPLIT = re.compile(r'(\.\d+|\.|\d+)')
-
-
-def import_ytdl():
-    """ import youtube_dl dynamically """
-    req_module = os.environ.get("YOUTUBE_DL_PATH", "youtube_dl")
-    try:
-        return importlib.import_module(req_module)
-    except ModuleNotFoundError:
-        _LOG.warning(f"please fix your requirements.txt file [{req_module}]")
-        raise
+_PTN_URL = re.compile(r"(?:https?|ftp)://[^|\s]+\.[^|\s]+")
 
 
 def is_url(url: str) -> bool:
-    return bool(re.match(r"(?:https?|ftp)://[^|\s]+\.[^|\s]+", url))
+    return bool(_PTN_URL.match(url))
 
 
 def sort_file_name_key(file_name: str) -> tuple:
@@ -99,11 +88,6 @@ def _sort_algo(data: List[str]) -> Iterator[Union[str, float]]:
         p1 = p2
 
 
-def demojify(string: str) -> str:
-    """ Remove emojis and other non-safe characters from string """
-    return get_emoji_regexp().sub(u'', string)
-
-
 def get_file_id_of_media(message: 'userge.Message') -> Optional[str]:
     """ get file_id """
     file_ = message.audio or message.animation or message.photo \
@@ -117,10 +101,10 @@ def get_file_id_of_media(message: 'userge.Message') -> Optional[str]:
 def humanbytes(size: float) -> str:
     """ humanize size """
     if not size:
-        return ""
+        return "0 B"
     power = 1024
     t_n = 0
-    power_dict = {0: ' ', 1: 'Ki', 2: 'Mi', 3: 'Gi', 4: 'Ti'}
+    power_dict = {0: '', 1: 'Ki', 2: 'Mi', 3: 'Gi', 4: 'Ti', 5: 'Pi', 6: 'Ei', 7: 'Zi', 8: 'Yi'}
     while size > power:
         size /= power
         t_n += 1
@@ -139,21 +123,6 @@ def time_formatter(seconds: float) -> str:
     return tmp[:-2]
 
 
-# https://github.com/UsergeTeam/Userge-Plugins/blob/master/plugins/anilist.py
-def post_to_telegraph(a_title: str, content: str) -> str:
-    """ Create a Telegram Post using HTML Content """
-    post_client = TelegraphPoster(use_api=True)
-    auth_name = "@theUserge"
-    post_client.create_api_token(auth_name)
-    post_page = post_client.post(
-        title=a_title,
-        author=auth_name,
-        author_url="https://t.me/theUserge",
-        text=content
-    )
-    return post_page['url']
-
-
 async def runcmd(cmd: str) -> Tuple[str, str, int, int]:
     """ run command in terminal """
     args = shlex.split(cmd)
@@ -169,13 +138,16 @@ async def runcmd(cmd: str) -> Tuple[str, str, int, int]:
 
 async def take_screen_shot(video_file: str, duration: int, path: str = '') -> Optional[str]:
     """ take a screenshot """
-    _LOG.info('[[[Extracting a frame from %s ||| Video duration => %s]]]', video_file, duration)
+    _LOG.info('Extracting a frame from %s ||| Video duration => %s', video_file, duration)
+
     ttl = duration // 2
-    thumb_image_path = path or join(userge.Config.DOWN_PATH, f"{basename(video_file)}.jpg")
+    thumb_image_path = path or join(userge.config.Dynamic.DOWN_PATH, f"{basename(video_file)}.jpg")
     command = f'''ffmpeg -ss {ttl} -i "{video_file}" -vframes 1 "{thumb_image_path}"'''
+
     err = (await runcmd(command))[1]
     if err:
         _LOG.error(err)
+
     return thumb_image_path if exists(thumb_image_path) else None
 
 
@@ -208,9 +180,9 @@ def parse_buttons(markdown_note: str) -> Tuple[str, Optional[InlineKeyboardMarku
 
 
 def is_command(cmd: str) -> bool:
-    commands = userge.userge.manager.enabled_commands
-    key = userge.Config.CMD_TRIGGER + cmd
-    _key = userge.Config.SUDO_TRIGGER + cmd
+    commands = userge.userge.manager.loaded_commands
+    key = userge.config.CMD_TRIGGER + cmd
+    _key = userge.config.SUDO_TRIGGER + cmd
 
     is_cmd = False
     if cmd in commands:
@@ -261,3 +233,14 @@ def extract_entities(message: Message, typeofentity: List[str]) -> List[str]:
         if url and cet in typeofentity:
             tero.append(url)
     return tero
+
+
+def get_custom_import_re(req_module, re_raise=True) -> Any:
+    """ import custom modules dynamically """
+    try:
+        return importlib.import_module(req_module)
+    except (ModuleNotFoundError, ImportError):
+        if re_raise:
+            raise
+
+        return None
