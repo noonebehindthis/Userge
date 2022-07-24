@@ -1,6 +1,6 @@
 <p align="center">
     <a href="https://github.com/UsergeTeam/Userge">
-        <img src="resources/userge.png" alt="Userge">
+        <img src="https://telegra.ph/file/f3aed2f6f2d4a1ad7831d.png" alt="Userge">
     </a>
     <br>
     <b>Pluggable Telegram UserBot</b>
@@ -49,9 +49,9 @@
 
 > Special Thanks to all of you !!!.
 
-## [Documentation](http://theuserge.tech) 📘
+## [Documentation](https://theuserge.github.io) 📘
 
-## [Deployment](http://theuserge.tech/deployment) 👷
+## [Deployment](https://theuserge.github.io/deployment) 👷
 
 ## [Plugins](https://github.com/UsergeTeam/Userge-Plugins) 🔌
 

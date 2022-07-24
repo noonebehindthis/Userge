@@ -12,7 +12,7 @@ __all__ = ['Filter']
 
 from typing import List, Dict, Callable, Any, Optional, Union
 
-from pyrogram import filters as rawfilters
+from pyrogram import enums
 from pyrogram.filters import Filter as RawFilter
 from pyrogram.handlers import MessageHandler
 from pyrogram.handlers.handler import Handler
@@ -28,7 +28,7 @@ class Filter:
                  filters: RawFilter,
                  client: '_client.Userge',
                  group: int,
-                 scope: List[str],
+                 scope: List[enums.ChatType],
                  only_admins: bool,
                  allow_via_bot: bool,
                  check_client: bool,
@@ -71,7 +71,7 @@ class Filter:
     def parse(cls, filters: RawFilter, **kwargs: Union['_client.Userge', int, bool]) -> 'Filter':
         """ parse filter """
         # pylint: disable=protected-access
-        return cls(**Filter._parse(filters=filters & ~rawfilters.edited, **kwargs))
+        return cls(**Filter._parse(filters=filters, **kwargs))
 
     @staticmethod
     def _parse(allow_private: bool,
@@ -81,16 +81,17 @@ class Filter:
                **kwargs: Union[RawFilter, '_client.Userge', int, bool]
                ) -> Dict[str, Union[RawFilter, '_client.Userge', int, bool]]:
         kwargs['check_client'] = kwargs['allow_via_bot'] and kwargs['check_client']
-        kwargs['scope'] = []
 
+        scope = []
         if allow_bots:
-            kwargs['scope'].append('bot')
+            scope.append(enums.ChatType.BOT)
         if allow_private:
-            kwargs['scope'].append('private')
+            scope.append(enums.ChatType.PRIVATE)
         if allow_channels:
-            kwargs['scope'].append('channel')
+            scope.append(enums.ChatType.CHANNEL)
         if allow_groups:
-            kwargs['scope'] += ['group', 'supergroup']
+            scope += [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
+        kwargs['scope'] = scope
 
         kwargs['check_perm'] = kwargs['check_change_info_perm'] \
             or kwargs['check_edit_perm'] or kwargs['check_delete_perm'] \
